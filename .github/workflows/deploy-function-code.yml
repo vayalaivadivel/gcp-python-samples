@@ -47,6 +47,11 @@ jobs:
         run: |
           cd emp-etl/src
           zip -r ../../etl_function.zip .
+          
+      - name: Validate secret reference
+        run: |
+          test -n "${{ secrets.DB_SECRET_NAME }}" || (echo "DB_SECRET_NAME is empty" && exit 1)
+          echo "Secret reference is configured"
 
       - name: Upload source zip to code bucket
         run: |
@@ -64,7 +69,7 @@ jobs:
             --trigger-bucket=${{ secrets.GCP_PROJECT_ID }}-input-${ENV} \
             --service-account=etl-fn-sa-${ENV}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars=INPUT_BUCKET=${{ secrets.GCP_PROJECT_ID }}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
-            --set-secrets=DB_PASS=${{ secrets.DB_SECRET_NAME }}:latest \
+            --set-secrets=DB_PASS=projects/${{ secrets.GCP_PROJECT_ID }}/secrets/${{ secrets.DB_SECRET_NAME }}:latest \
             --memory=512MB \
             --timeout=540s \
             --quiet
