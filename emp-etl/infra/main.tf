@@ -108,7 +108,7 @@ resource "google_project_iam_member" "storage_access" {
 
 data "archive_file" "etl_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/src"
+  source_dir  = "${path.module}/../src"
   output_path = "${path.module}/etl.zip"
 }
 
