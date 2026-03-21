@@ -1,6 +1,3 @@
-name,salary,department
-John Doe,50000,Engineering
-Jane Smith,60000,Finance
-Michael Brown,55000,IT
-Emily Davis,62000,HR
-Robert Wilson,58000,Marketing
+emp_name,dept,salary
+Monkey,Development,500000
+DOnkey,Testing,400000
