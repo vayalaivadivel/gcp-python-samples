@@ -1,4 +1,4 @@
-name: Terraform Infra (emp-etl)
+name: Infra Setup (emp-etl)
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ on:
           - destroy
 
 permissions:
-  id-token: write     # 🔥 THIS FIXES YOUR ERROR
+  id-token: write
   contents: read
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # ✅ WIF Authentication
+      # 🔐 WIF Authentication
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -48,16 +48,29 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # ✅ Always INIT
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -input=false
 
+      # ✅ Always PLAN (safety step)
       - name: Terraform Plan
-        run: terraform plan -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+        run: |
+          terraform plan -input=false \
+            -var="env=${{ github.event.inputs.environment }}" \
+            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
 
+      # 🚀 APPLY
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
-        run: terraform apply -auto-approve -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var="env=${{ github.event.inputs.environment }}" \
+            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
 
+      # ❌ DESTROY
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
-        run: terraform destroy -auto-approve -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+        run: |
+          terraform destroy -input=false -auto-approve \
+            -var="env=${{ github.event.inputs.environment }}" \
+            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
