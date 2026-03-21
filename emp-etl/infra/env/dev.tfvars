@@ -3,4 +3,3 @@ region            = "us-central1"
 mysql_user     = "etl_user"
 mysql_password = "SuperSecret123!"  # sensitive
 mysql_db       = "etl_db"
-my_ip="106.221.178.136/32"
