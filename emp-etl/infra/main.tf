@@ -133,26 +133,31 @@ resource "google_cloudfunctions_function" "etl" {
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
 
-  trigger_http = false
-
-  event_trigger {
-    event_type = "google.storage.object.finalize"
-    resource   = google_storage_bucket.input_bucket.name
-  }
+  # ❌ Remove HTTP trigger
+  # trigger_http = true
 
   available_memory_mb = 512
   timeout             = 540
 
   environment_variables = {
     INPUT_BUCKET = google_storage_bucket.input_bucket.name
-    DB_HOST      = google_sql_database_instance.mysql.public_ip_address
-    DB_NAME      = var.mysql_db
-    DB_USER      = var.mysql_user
+
+    DB_HOST = google_sql_database_instance.mysql.public_ip_address
+    DB_NAME = var.mysql_db
+    DB_USER = var.mysql_user
   }
 
   secret_environment_variables {
     key     = "DB_PASS"
     secret  = google_secret_manager_secret.mysql_password.secret_id
     version = "latest"
+  }
+
+  event_trigger {
+    event_type = "google.storage.object.finalize"
+    resource   = google_storage_bucket.input_bucket.name
+    failure_policy {
+      retry = true
+    }
   }
 }
