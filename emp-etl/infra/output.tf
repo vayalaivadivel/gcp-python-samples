@@ -7,7 +7,7 @@ output "mysql_public_ip" {
 }
 
 output "source_code_bucket" {
-  value     = google_storage_bucket.code_bucket
+  value     = google_storage_bucket.code_bucket.name
 }
 
 output "input_bucket" {

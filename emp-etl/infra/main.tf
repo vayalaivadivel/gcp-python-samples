@@ -33,10 +33,22 @@ resource "google_sql_database_instance" "mysql" {
   region           = var.region
 
   settings {
-    tier = "db-f1-micro"
-    disk_autoresize = true
-    backup_configuration { enabled = false }
-    ip_configuration { ipv4_enabled = true }
+    tier             = "db-f1-micro"
+    disk_autoresize  = true
+
+    backup_configuration {
+      enabled = false
+    }
+
+    ip_configuration {
+      ipv4_enabled = true
+
+      # 🔥 Allow public access
+      authorized_networks {
+        name  = "all-access"
+        value = "0.0.0.0/0"
+      }
+    }
   }
 }
 
