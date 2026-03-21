@@ -48,6 +48,10 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Remove stale Terraform lock
+        run: |
+          gsutil rm -f gs://vadivel_terraform_buc/etl-project/${{ github.event.inputs.environment }}/default.tflock || true
+
       # ✅ Always INIT
       - name: Terraform Init
         run: terraform init -input=false
