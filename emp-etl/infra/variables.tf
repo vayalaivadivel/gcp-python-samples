@@ -37,7 +37,3 @@ variable "mysql_password" {
   type        = string
   sensitive   = true
 }
-
-variable "my_ip" {
-  
-}
