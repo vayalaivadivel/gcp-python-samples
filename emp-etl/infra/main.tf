@@ -1,12 +1,4 @@
 ##########################
-# Providers
-##########################
-provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-
-##########################
 # Buckets
 ##########################
 resource "google_storage_bucket" "input_bucket" {
