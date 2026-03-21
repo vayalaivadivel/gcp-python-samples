@@ -4,24 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Select environment"
+        description: "dev or prod"
         required: true
         type: choice
         options:
           - dev
           - prod
       action:
-        description: "Select action"
+        description: "apply or destroy"
         required: true
         type: choice
         options:
           - apply
           - destroy
 
+permissions:
+  id-token: write     # 🔥 THIS FIXES YOUR ERROR
+  contents: read
+
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
     environment: ${{ github.event.inputs.environment }}
 
     defaults:
@@ -29,12 +32,11 @@ jobs:
         working-directory: emp-etl/infra
 
     steps:
-      # 1️⃣ Checkout
       - name: Checkout
         uses: actions/checkout@v3
 
-      # 2️⃣ Authenticate GCP
-      - name: Authenticate GCP
+      # ✅ WIF Authentication
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -43,24 +45,19 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # 3️⃣ Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 4️⃣ Init (always)
       - name: Terraform Init
         run: terraform init
 
-      # 5️⃣ Plan (always before apply/destroy)
       - name: Terraform Plan
         run: terraform plan -var-file="env/${{ github.event.inputs.environment }}.tfvars"
 
-      # 6️⃣ Apply
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         run: terraform apply -auto-approve -var-file="env/${{ github.event.inputs.environment }}.tfvars"
 
-      # 7️⃣ Destroy
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
         run: terraform destroy -auto-approve -var-file="env/${{ github.event.inputs.environment }}.tfvars"
