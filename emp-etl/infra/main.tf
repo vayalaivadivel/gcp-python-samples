@@ -1,56 +1,42 @@
-##############################
-# Storage Buckets
-##############################
-
-# Input bucket
-resource "google_storage_bucket" "input_bucket" {
-  name                        = "${var.project_id}-input-${var.env}"
-  location                    = var.region
-  force_destroy               = var.env == "dev" ? true : false
-  uniform_bucket_level_access = true
-
-  labels = {
-    env  = var.env
-    type = "input"
-  }
-}
-
-# Code bucket
+###########################
+# Buckets
+###########################
 resource "google_storage_bucket" "code_bucket" {
-  name                        = "${var.project_id}-function-code-${var.env}"
-  location                    = var.region
-  force_destroy               = true
-  uniform_bucket_level_access = true
+  name     = "${var.project_id}-function-code-${var.env}"
+  location = var.region
+  force_destroy = true
 
+  uniform_bucket_level_access = true
   labels = {
-    env  = var.env
-    type = "code"
+    "goog-terraform-provisioned" = "true"
   }
 }
 
-##############################
-# Cloud SQL (MySQL)
-##############################
+resource "google_storage_bucket" "input_bucket" {
+  name     = "${var.project_id}-input-${var.env}"
+  location = var.region
+  force_destroy = true
 
+  uniform_bucket_level_access = true
+  labels = {
+    "env"  = var.env
+    "type" = "input"
+  }
+}
+
+###########################
+# Cloud SQL: MySQL
+###########################
 resource "google_sql_database_instance" "mysql" {
   name             = "etl-emp-${var.env}"
   database_version = "MYSQL_8_0"
   region           = var.region
 
-  deletion_protection = var.env == "prod" ? true : false
-
   settings {
     tier = "db-f1-micro"
-    ip_configuration {
-      ipv4_enabled = true
-      authorized_networks {
-        name  = "laptop"
-        value = var.my_ip   # optional
-      }
-    }
-    backup_configuration {
-      enabled = var.env == "prod" ? true : false
-    }
+    disk_autoresize = true
+    backup_configuration { enabled = false }
+    ip_configuration { ipv4_enabled = true }
   }
 }
 
@@ -65,14 +51,13 @@ resource "google_sql_user" "user" {
   password = var.mysql_password
 }
 
-##############################
-# Secret Manager
-##############################
-
+###########################
+# Secret Manager: DB password
+###########################
 resource "google_secret_manager_secret" "mysql_password" {
-  secret_id = "mysql-password-${var.env}"
-  replication { 
-    auto {} 
+  secret_id = "${var.mysql_user}-password-${var.env}"
+  replication {
+    auto {}
   }
 }
 
@@ -81,15 +66,17 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
   secret_data = var.mysql_password
 }
 
-##############################
-# Service Account & IAM
-##############################
-
+###########################
+# Service Account for Cloud Function
+###########################
 resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
 }
 
+###########################
+# IAM for Service Account
+###########################
 resource "google_project_iam_member" "secret_access" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
@@ -102,29 +89,28 @@ resource "google_project_iam_member" "storage_access" {
   member  = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
-##############################
-# Archive Python Code
-##############################
-
+###########################
+# Create Zip from src
+###########################
 data "archive_file" "etl_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../src"
-  output_path = "${path.module}/etl.zip"
+  source_dir  = "${path.module}/src"
+  output_path = "${path.module}/infra/empty.zip"
 }
 
 resource "google_storage_bucket_object" "etl_zip" {
-  name   = "etl.zip"
+  name   = "etl_function.zip"
   bucket = google_storage_bucket.code_bucket.name
   source = data.archive_file.etl_zip.output_path
+  depends_on = [google_storage_bucket.code_bucket]
 }
 
-##############################
-# Cloud Function (Event-based)
-##############################
-
+###########################
+# Cloud Function (event-based)
+###########################
 resource "google_cloudfunctions_function" "etl" {
-  name        = "${var.function_name}-${var.env}"
-  runtime     = var.function_runtime
+  name        = "etl-function-${var.env}"
+  runtime     = "python311"
   entry_point = "etl_handler"
   region      = var.region
 
@@ -133,18 +119,19 @@ resource "google_cloudfunctions_function" "etl" {
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
 
-  # ❌ Remove HTTP trigger
-  # trigger_http = true
+  event_trigger {
+    event_type = "google.storage.object.finalize"
+    resource   = google_storage_bucket.input_bucket.name
+  }
 
   available_memory_mb = 512
   timeout             = 540
 
   environment_variables = {
     INPUT_BUCKET = google_storage_bucket.input_bucket.name
-
-    DB_HOST = google_sql_database_instance.mysql.public_ip_address
-    DB_NAME = var.mysql_db
-    DB_USER = var.mysql_user
+    DB_HOST      = google_sql_database_instance.mysql.public_ip_address
+    DB_NAME      = var.mysql_db
+    DB_USER      = var.mysql_user
   }
 
   secret_environment_variables {
@@ -153,11 +140,11 @@ resource "google_cloudfunctions_function" "etl" {
     version = "latest"
   }
 
-  event_trigger {
-    event_type = "google.storage.object.finalize"
-    resource   = google_storage_bucket.input_bucket.name
-    failure_policy {
-      retry = true
-    }
-  }
+  depends_on = [
+    google_sql_database_instance.mysql,
+    google_storage_bucket_object.etl_zip,
+    google_service_account.function_sa,
+    google_project_iam_member.secret_access,
+    google_project_iam_member.storage_access
+  ]
 }
