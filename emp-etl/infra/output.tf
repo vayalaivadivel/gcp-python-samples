@@ -6,8 +6,8 @@ output "mysql_public_ip" {
    value = google_sql_database_instance.mysql.public_ip_address
 }
 
-output "mysql_username" {
-  value     = google_sql_user.user
+output "source_code_bucket" {
+  value     = google_storage_bucket.code_bucket
 }
 
 output "input_bucket" {
