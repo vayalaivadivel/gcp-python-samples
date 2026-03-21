@@ -46,6 +46,11 @@ jobs:
         run: |
           cd emp-etl/src
           zip -r ../../etl_function.zip .
+      - name: Debug bucket name
+        run: |
+            echo "ENV=${ENV}"
+            echo "PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+            echo "BUCKET=${{ secrets.GCP_PROJECT_ID }}-function-code-${ENV}"
 
       - name: Upload source zip to code bucket
         run: |
