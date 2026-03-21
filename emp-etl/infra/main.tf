@@ -139,27 +139,3 @@ resource "google_cloudfunctions_function" "etl" {
     version = "latest"
   }
 }
-
-resource "null_resource" "create_emp_table" {
-  depends_on = [
-    google_sql_database_instance.mysql,
-    google_sql_database.db,
-    google_sql_user.user
-  ]
-
-  provisioner "local-exec" {
-    command = <<EOT
-      mysql -h ${google_sql_database_instance.mysql.public_ip_address} \
-            -u ${google_sql_user.user.name} \
-            -p${google_sql_user.user.password} \
-            ${google_sql_database.db.name} \
-            -e "CREATE TABLE IF NOT EXISTS emp (
-                  id INT AUTO_INCREMENT PRIMARY KEY,
-                  name VARCHAR(100),
-                  salary DECIMAL(10,2),
-                  dept VARCHAR(50)
-                );"
-    EOT
-    interpreter = ["/bin/bash", "-c"]
-  }
-}
