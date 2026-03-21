@@ -1,3 +1,6 @@
+# ========================
+# Input Cloud Storage Bucket
+# ========================
 resource "google_storage_bucket" "input_bucket" {
   name     = "${var.project_id}-input-${var.env}"
   location = var.region
@@ -6,11 +9,14 @@ resource "google_storage_bucket" "input_bucket" {
   uniform_bucket_level_access = true
 
   labels = {
-    env = var.env
+    env  = var.env
     type = "input"
   }
 }
 
+# ========================
+# Cloud SQL MySQL
+# ========================
 resource "google_sql_database_instance" "mysql" {
   name             = "etl-emp-${var.env}"
   database_version = "MYSQL_8_0"
@@ -24,10 +30,10 @@ resource "google_sql_database_instance" "mysql" {
     ip_configuration {
       ipv4_enabled = true
 
-      # ✅ DO NOT use 0.0.0.0/0 in production
+      # 🔹 Only allow your laptop/public IP to connect
       authorized_networks {
         name  = "laptop"
-        value = var.my_ip   # e.g. "1.2.3.4/32"
+        value = var.my_ip  # e.g., "1.2.3.4/32"
       }
     }
 
@@ -48,6 +54,9 @@ resource "google_sql_user" "user" {
   password = var.mysql_password
 }
 
+# ========================
+# Secret Manager
+# ========================
 resource "google_secret_manager_secret" "mysql_password" {
   secret_id = "mysql-password-${var.env}"
 
@@ -61,8 +70,9 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
   secret_data = var.mysql_password
 }
 
-
-# Service account
+# ========================
+# Service Account for Cloud Function
+# ========================
 resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
@@ -80,8 +90,21 @@ resource "google_project_iam_member" "storage_access" {
   member  = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
+# ========================
+# Cloud Function (event-driven on input bucket)
+# ========================
+resource "google_storage_bucket" "code_bucket" {
+  name     = "${var.project_id}-function-code-${var.env}"
+  location = var.region
+  force_destroy = true
+}
 
-# cloud function
+resource "google_storage_bucket_object" "etl_zip" {
+  name   = "empty.zip"
+  bucket = google_storage_bucket.code_bucket.name
+  source = "${path.module}/empty.zip" # minimal stub
+}
+
 resource "google_cloudfunctions_function" "etl" {
   name        = "${var.function_name}-${var.env}"
   runtime     = var.function_runtime
@@ -93,7 +116,11 @@ resource "google_cloudfunctions_function" "etl" {
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
 
-  trigger_http = true
+  # 🔹 Event-based trigger
+  event_trigger {
+    event_type = "google.storage.object.finalize"
+    resource   = google_storage_bucket.input_bucket.name
+  }
 
   available_memory_mb = 512
   timeout             = 540
@@ -113,15 +140,26 @@ resource "google_cloudfunctions_function" "etl" {
   }
 }
 
+resource "null_resource" "create_emp_table" {
+  depends_on = [
+    google_sql_database_instance.mysql,
+    google_sql_database.db,
+    google_sql_user.user
+  ]
 
-#cloud scheduler
-resource "google_cloud_scheduler_job" "etl_job" {
-  name     = "etl-scheduler-${var.env}"
-  schedule = var.env == "prod" ? "0 * * * *" : "*/10 * * * *"
-  region   = var.region
-
-  http_target {
-    uri         = google_cloudfunctions_function.etl.https_trigger_url
-    http_method = "GET"
+  provisioner "local-exec" {
+    command = <<EOT
+      mysql -h ${google_sql_database_instance.mysql.public_ip_address} \
+            -u ${google_sql_user.user.name} \
+            -p${google_sql_user.user.password} \
+            ${google_sql_database.db.name} \
+            -e "CREATE TABLE IF NOT EXISTS emp (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  name VARCHAR(100),
+                  salary DECIMAL(10,2),
+                  dept VARCHAR(50)
+                );"
+    EOT
+    interpreter = ["/bin/bash", "-c"]
   }
 }
