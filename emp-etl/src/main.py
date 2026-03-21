@@ -4,7 +4,7 @@ import mysql.connector
 from google.cloud import storage
 from datetime import datetime
 
-def etl_job(request):
+def etl_handler(request):
     conn = mysql.connector.connect(
         host=os.environ["DB_HOST"],
         user=os.environ["DB_USER"],
