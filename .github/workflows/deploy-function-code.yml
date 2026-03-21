@@ -55,15 +55,15 @@ jobs:
       - name: Deploy updated Cloud Function
         run: |
           gcloud functions deploy etl-function-${ENV} \
-            --gen2=false \
-            --project=${PROJECT_ID} \
+            --no-gen2 \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
             --region=${{ secrets.GCP_REGION }} \
             --runtime=python311 \
             --entry-point=etl_handler \
             --source=emp-etl/src \
-            --trigger-bucket=${PROJECT_ID}-input-${ENV} \
-            --service-account=etl-fn-sa-${ENV}@${PROJECT_ID}.iam.gserviceaccount.com \
-            --set-env-vars=INPUT_BUCKET=${PROJECT_ID}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
+            --trigger-bucket=${{ secrets.GCP_PROJECT_ID }}-input-${ENV} \
+            --service-account=etl-fn-sa-${ENV}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars=INPUT_BUCKET=${{ secrets.GCP_PROJECT_ID }}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
             --set-secrets=DB_PASS=${{ secrets.DB_SECRET_NAME }}:latest \
             --memory=512MB \
             --timeout=540s \
