@@ -107,7 +107,7 @@ resource "google_project_iam_member" "storage_access" {
 data "archive_file" "etl_zip" {
   type        = "zip"
   source_dir  = "${path.module}/../src"
-  output_path = "${path.module}/infra/empty.zip"
+  output_path = "${path.module}/etl_function.zip"
 }
 
 resource "google_storage_bucket_object" "etl_zip" {
@@ -141,7 +141,7 @@ resource "google_cloudfunctions_function" "etl" {
 
   environment_variables = {
     INPUT_BUCKET = google_storage_bucket.input_bucket.name
-    DB_HOST      = google_sql_database_instance.mysql.public_ip_address
+    DB_HOST = google_sql_database_instance.mysql.ip_address[0].ip_address
     DB_NAME      = var.mysql_db
     DB_USER      = var.mysql_user
   }
