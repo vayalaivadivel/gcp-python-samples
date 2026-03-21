@@ -28,6 +28,7 @@ jobs:
 
     env:
       ENV: ${{ github.event.inputs.environment || 'dev' }}
+      PROJECT_ID: project-d25d1c66-5ac7-43e4-974
 
     steps:
       - name: Checkout
@@ -46,28 +47,23 @@ jobs:
         run: |
           cd emp-etl/src
           zip -r ../../etl_function.zip .
-      - name: Debug bucket name
-        run: |
-            echo "ENV=${ENV}"
-            echo "PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
-            echo "BUCKET=${{ secrets.GCP_PROJECT_ID }}-function-code-${ENV}"
 
       - name: Upload source zip to code bucket
         run: |
-          gcloud storage cp etl_function.zip gs://${{ secrets.GCP_PROJECT_ID }}-function-code-${ENV}/etl_function.zip
+          gcloud storage cp etl_function.zip gs://${PROJECT_ID}-function-code-${ENV}/etl_function.zip
 
       - name: Deploy updated Cloud Function
         run: |
           gcloud functions deploy etl-function-${ENV} \
             --gen2=false \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --project=${PROJECT_ID} \
             --region=${{ secrets.GCP_REGION }} \
             --runtime=python311 \
             --entry-point=etl_handler \
             --source=emp-etl/src \
-            --trigger-bucket=${{ secrets.GCP_PROJECT_ID }}-input-${ENV} \
-            --service-account=etl-fn-sa-${ENV}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars=INPUT_BUCKET=${{ secrets.GCP_PROJECT_ID }}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
+            --trigger-bucket=${PROJECT_ID}-input-${ENV} \
+            --service-account=etl-fn-sa-${ENV}@${PROJECT_ID}.iam.gserviceaccount.com \
+            --set-env-vars=INPUT_BUCKET=${PROJECT_ID}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
             --set-secrets=DB_PASS=${{ secrets.DB_SECRET_NAME }}:latest \
             --memory=512MB \
             --timeout=540s \
