@@ -1,10 +1,17 @@
-# ========================
-# Input Cloud Storage Bucket
-# ========================
-resource "google_storage_bucket" "input_bucket" {
-  name     = "${var.project_id}-input-${var.env}"
-  location = var.region
+##########################
+# Providers
+##########################
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
 
+##########################
+# Buckets
+##########################
+resource "google_storage_bucket" "input_bucket" {
+  name                        = "${var.project_id}-input-${var.env}"
+  location                    = var.region
   force_destroy               = var.env == "dev" ? true : false
   uniform_bucket_level_access = true
 
@@ -14,14 +21,25 @@ resource "google_storage_bucket" "input_bucket" {
   }
 }
 
-# ========================
-# Cloud SQL MySQL
-# ========================
+resource "google_storage_bucket" "code_bucket" {
+  name                        = "${var.project_id}-function-code-${var.env}"
+  location                    = var.region
+  force_destroy               = true
+  uniform_bucket_level_access = true
+
+  labels = {
+    env  = var.env
+    type = "code"
+  }
+}
+
+##########################
+# Cloud SQL (MySQL)
+##########################
 resource "google_sql_database_instance" "mysql" {
   name             = "etl-emp-${var.env}"
   database_version = "MYSQL_8_0"
   region           = var.region
-
   deletion_protection = var.env == "prod" ? true : false
 
   settings {
@@ -29,11 +47,9 @@ resource "google_sql_database_instance" "mysql" {
 
     ip_configuration {
       ipv4_enabled = true
-
-      # 🔹 Only allow your laptop/public IP to connect
       authorized_networks {
         name  = "laptop"
-        value = var.my_ip  # e.g., "1.2.3.4/32"
+        value = var.my_ip
       }
     }
 
@@ -54,14 +70,13 @@ resource "google_sql_user" "user" {
   password = var.mysql_password
 }
 
-# ========================
+##########################
 # Secret Manager
-# ========================
+##########################
 resource "google_secret_manager_secret" "mysql_password" {
   secret_id = "mysql-password-${var.env}"
-
   replication {
-    auto {}
+     auto {} 
   }
 }
 
@@ -70,9 +85,9 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
   secret_data = var.mysql_password
 }
 
-# ========================
-# Service Account for Cloud Function
-# ========================
+##########################
+# Service Account
+##########################
 resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
@@ -82,27 +97,25 @@ resource "google_project_iam_member" "secret_access" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${google_service_account.function_sa.email}"
+
+  depends_on = [google_service_account.function_sa]
 }
 
 resource "google_project_iam_member" "storage_access" {
   project = var.project_id
   role    = "roles/storage.objectAdmin"
   member  = "serviceAccount:${google_service_account.function_sa.email}"
+
+  depends_on = [google_service_account.function_sa]
 }
 
-# ========================
-# Cloud Function (event-driven on input bucket)
-# ========================
-resource "google_storage_bucket" "code_bucket" {
-  name     = "${var.project_id}-function-code-${var.env}"
-  location = var.region
-  force_destroy = true
-}
-
+##########################
+# Cloud Function (event-triggered)
+##########################
 resource "google_storage_bucket_object" "etl_zip" {
   name   = "empty.zip"
   bucket = google_storage_bucket.code_bucket.name
-  source = "${path.module}/empty.zip" # minimal stub
+  source = "./empty.zip"  # replace with your function zip if ready
 }
 
 resource "google_cloudfunctions_function" "etl" {
@@ -116,10 +129,12 @@ resource "google_cloudfunctions_function" "etl" {
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
 
-  # 🔹 Event-based trigger
   event_trigger {
     event_type = "google.storage.object.finalize"
     resource   = google_storage_bucket.input_bucket.name
+    failure_policy {
+      retry = true
+    }
   }
 
   available_memory_mb = 512
@@ -127,10 +142,9 @@ resource "google_cloudfunctions_function" "etl" {
 
   environment_variables = {
     INPUT_BUCKET = google_storage_bucket.input_bucket.name
-
-    DB_HOST = google_sql_database_instance.mysql.public_ip_address
-    DB_NAME = var.mysql_db
-    DB_USER = var.mysql_user
+    DB_HOST      = google_sql_database_instance.mysql.public_ip_address
+    DB_NAME      = var.mysql_db
+    DB_USER      = var.mysql_user
   }
 
   secret_environment_variables {
@@ -138,4 +152,9 @@ resource "google_cloudfunctions_function" "etl" {
     secret  = google_secret_manager_secret.mysql_password.secret_id
     version = "latest"
   }
+
+  depends_on = [
+    google_project_iam_member.secret_access,
+    google_project_iam_member.storage_access
+  ]
 }
