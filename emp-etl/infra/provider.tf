@@ -11,9 +11,7 @@ terraform {
     }
   }
 }
-
 provider "google" {
-  project = "project-d25d1c66-5ac7-43e4-974"
-  region  = "asia-south1"
-  zone    = "asia-south1-a"
+  project = var.project_id
+  region  = var.region
 }

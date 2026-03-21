@@ -1,0 +1,59 @@
+# ------------------------------
+# Terraform
+# ------------------------------
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Ignore local tfvars (may contain secrets)
+terraform.tfvars
+*.auto.tfvars
+
+# Keep env configs (IMPORTANT)
+!emp-etl/infra/env/
+!emp-etl/infra/env/*.tfvars
+
+# ------------------------------
+# Terraform Lock File (OPTIONAL)
+# ------------------------------
+# Usually KEEP this for reproducibility
+!.terraform.lock.hcl
+
+# ------------------------------
+# GCP / Credentials
+# ------------------------------
+*.json
+!requirements.json
+
+# ------------------------------
+# Build / Zip الملفات
+# ------------------------------
+*.zip
+
+# ------------------------------
+# Python
+# ------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.env
+venv/
+.venv/
+
+# ------------------------------
+# OS / Editor
+# ------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ------------------------------
+# Test / Temp Files
+# ------------------------------
+*.csv
+!emp-etl/test/data/*.csv

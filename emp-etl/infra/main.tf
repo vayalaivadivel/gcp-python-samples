@@ -1,152 +1,127 @@
-# ========================
-# Buckets
-# ========================
-resource "google_storage_bucket" "etl_code_bucket" {
-  name          = var.code_bucket_name
-  location      = var.region
-  force_destroy = true
+resource "google_storage_bucket" "input_bucket" {
+  name     = "${var.project_id}-input-${var.env}"
+  location = var.region
+
+  force_destroy               = var.env == "dev" ? true : false
   uniform_bucket_level_access = true
+
+  labels = {
+    env = var.env
+    type = "input"
+  }
 }
 
-resource "google_storage_bucket" "etl_input_bucket" {
-  name          = var.input_bucket_name
-  location      = var.region
-  force_destroy = true
-  uniform_bucket_level_access = true
-}
-
-resource "google_storage_bucket" "etl_output_bucket" {
-  name          = var.output_bucket_name
-  location      = var.region
-  force_destroy = true
-  uniform_bucket_level_access = true
-}
-
-# ========================
-# Cloud SQL MySQL Instance (Public)
-# ========================
-resource "google_sql_database_instance" "mysql_instance" {
-  name             = "etl-mysql-instance"
+resource "google_sql_database_instance" "mysql" {
+  name             = "etl-emp-${var.env}"
   database_version = "MYSQL_8_0"
   region           = var.region
-  deletion_protection = false 
+
+  deletion_protection = var.env == "prod" ? true : false
+
   settings {
     tier = "db-f1-micro"
 
     ip_configuration {
       ipv4_enabled = true
 
+      # ✅ DO NOT use 0.0.0.0/0 in production
       authorized_networks {
-        name  = "all"
-        value = "0.0.0.0/0"  # WARNING: public access
+        name  = "laptop"
+        value = var.my_ip   # e.g. "1.2.3.4/32"
       }
+    }
+
+    backup_configuration {
+      enabled = var.env == "prod" ? true : false
     }
   }
 }
 
-resource "google_sql_database" "etl_db" {
+resource "google_sql_database" "db" {
   name     = var.mysql_db
-  instance = google_sql_database_instance.mysql_instance.name
+  instance = google_sql_database_instance.mysql.name
 }
 
-resource "google_sql_user" "etl_user" {
+resource "google_sql_user" "user" {
   name     = var.mysql_user
-  instance = google_sql_database_instance.mysql_instance.name
+  instance = google_sql_database_instance.mysql.name
   password = var.mysql_password
 }
 
-# ========================
-# Secret Manager for MySQL
-# ========================
-
-# MySQL Username
-resource "google_secret_manager_secret" "mysql_user" {
-  secret_id = "MYSQL_USER"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "mysql_user_version" {
-  secret      = google_secret_manager_secret.mysql_user.id
-  secret_data = var.mysql_user
-}
-
-# MySQL Password
 resource "google_secret_manager_secret" "mysql_password" {
-  secret_id = "MYSQL_PASSWORD"
+  secret_id = "mysql-password-${var.env}"
+
   replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
+    auto {}
   }
 }
 
-resource "google_secret_manager_secret_version" "mysql_password_version" {
+resource "google_secret_manager_secret_version" "mysql_password_v" {
   secret      = google_secret_manager_secret.mysql_password.id
   secret_data = var.mysql_password
 }
 
-# Zip the function automatically
-data "archive_file" "etl_function_zip" {
-  type        = "zip"
-  source_dir  = "../src/"
-  output_path = "${path.module}/etl_function.zip"
+
+# Service account
+resource "google_service_account" "function_sa" {
+  account_id   = "etl-fn-sa-${var.env}"
+  display_name = "ETL Function SA"
 }
 
-# Upload ZIP to Google Cloud Storage
-resource "google_storage_bucket_object" "etl_function_zip" {
-  name   = "etl_function.zip"
-  bucket = google_storage_bucket.etl_code_bucket.name
-  source = data.archive_file.etl_function_zip.output_path
+resource "google_project_iam_member" "secret_access" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.function_sa.email}"
 }
-# ========================
-# Cloud Function for ETL (Event-triggered)
-# ========================
-resource "google_cloudfunctions_function" "etl_function" {
-  name        = var.function_name
+
+resource "google_project_iam_member" "storage_access" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.function_sa.email}"
+}
+
+
+# cloud function
+resource "google_cloudfunctions_function" "etl" {
+  name        = "${var.function_name}-${var.env}"
   runtime     = var.function_runtime
   entry_point = "etl_handler"
+  region      = var.region
 
-  source_archive_bucket = google_storage_bucket.etl_code_bucket.name
-  source_archive_object = google_storage_bucket_object.etl_function_zip.name
+  service_account_email = google_service_account.function_sa.email
 
-  event_trigger {
-    event_type = "google.storage.object.finalize"
-    resource   = google_storage_bucket.etl_input_bucket.name
-  }
+  source_archive_bucket = google_storage_bucket.code_bucket.name
+  source_archive_object = google_storage_bucket_object.etl_zip.name
+
+  trigger_http = true
+
+  available_memory_mb = 512
+  timeout             = 540
 
   environment_variables = {
-    MYSQL_HOST     = google_sql_database_instance.mysql_instance.public_ip_address
-    MYSQL_USER     = var.mysql_user
-    MYSQL_PASSWORD = var.mysql_password
-    MYSQL_DB       = var.mysql_db
-    BUCKET_NAME    = google_storage_bucket.etl_input_bucket.name
+    INPUT_BUCKET = google_storage_bucket.input_bucket.name
+
+    DB_HOST = google_sql_database_instance.mysql.public_ip_address
+    DB_NAME = var.mysql_db
+    DB_USER = var.mysql_user
+  }
+
+  secret_environment_variables {
+    key     = "DB_PASS"
+    secret  = google_secret_manager_secret.mysql_password.secret_id
+    version = "latest"
   }
 }
 
-resource "google_storage_bucket_iam_member" "function_bucket_reader" {
-  bucket = google_storage_bucket.etl_input_bucket.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:project-d25d1c66-5ac7-43e4-974@appspot.gserviceaccount.com"
+
+#cloud scheduler
+resource "google_cloud_scheduler_job" "etl_job" {
+  name     = "etl-scheduler-${var.env}"
+  schedule = var.env == "prod" ? "0 * * * *" : "*/10 * * * *"
+  region   = var.region
+
+  http_target {
+    uri         = google_cloudfunctions_function.etl.https_trigger_url
+    http_method = "GET"
+  }
 }
-
-# IAM: Give Cloud Function access to read secrets
-# resource "google_project_iam_member" "cloud_function_secret_access_user" {
-#   project = var.project_id
-#   role    = "roles/secretmanager.secretAccessor"
-#   member  = "serviceAccount:${google_cloudfunctions_function.etl_function.service_account_email}"
-# }
-
-# resource "google_project_iam_member" "cloud_function_secret_access_password" {
-#   project = var.project_id
-#   role    = "roles/secretmanager.secretAccessor"
-#   member  = "serviceAccount:${google_cloudfunctions_function.etl_function.service_account_email}"
-# }

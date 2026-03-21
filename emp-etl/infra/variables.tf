@@ -1,28 +1,43 @@
-variable "project_id" {}
-variable "region" {
-  default = "us-central1"
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
 }
 
-variable "code_bucket_name" {}
-variable "input_bucket_name" {}
-variable "output_bucket_name" {}
+variable "env" {
+  description = "Environment (dev/prod)"
+  type        = string
+}
+
+variable "region" {
+  description = "GCP region"
+  type        = string
+  default     = "asia-south1"
+}
+
+# Cloud Function
+variable "function_name" {
+  default = "etl-function"
+}
+
+variable "function_runtime" {
+  default = "python311"
+}
+
+# MySQL
+variable "mysql_db" {
+  default = "etl_db"
+}
 
 variable "mysql_user" {
   default = "etl_user"
 }
 
 variable "mysql_password" {
-  sensitive = true
+  description = "MySQL password"
+  type        = string
+  sensitive   = true
 }
 
-variable "mysql_db" {
-  default = "etl_db"
-}
-
-variable "function_name" {
-  default = "etl-function"
-}
-
-variable "function_runtime" {
-  default = "python310"
+variable "my_ip" {
+  
 }
