@@ -1,6 +1,8 @@
-##########################
-# Buckets
-##########################
+##############################
+# Storage Buckets
+##############################
+
+# Input bucket
 resource "google_storage_bucket" "input_bucket" {
   name                        = "${var.project_id}-input-${var.env}"
   location                    = var.region
@@ -13,6 +15,7 @@ resource "google_storage_bucket" "input_bucket" {
   }
 }
 
+# Code bucket
 resource "google_storage_bucket" "code_bucket" {
   name                        = "${var.project_id}-function-code-${var.env}"
   location                    = var.region
@@ -25,26 +28,26 @@ resource "google_storage_bucket" "code_bucket" {
   }
 }
 
-##########################
+##############################
 # Cloud SQL (MySQL)
-##########################
+##############################
+
 resource "google_sql_database_instance" "mysql" {
   name             = "etl-emp-${var.env}"
   database_version = "MYSQL_8_0"
   region           = var.region
+
   deletion_protection = var.env == "prod" ? true : false
 
   settings {
     tier = "db-f1-micro"
-
     ip_configuration {
       ipv4_enabled = true
       authorized_networks {
         name  = "laptop"
-        value = var.my_ip
+        value = var.my_ip   # optional
       }
     }
-
     backup_configuration {
       enabled = var.env == "prod" ? true : false
     }
@@ -62,13 +65,14 @@ resource "google_sql_user" "user" {
   password = var.mysql_password
 }
 
-##########################
+##############################
 # Secret Manager
-##########################
+##############################
+
 resource "google_secret_manager_secret" "mysql_password" {
   secret_id = "mysql-password-${var.env}"
-  replication {
-     auto {} 
+  replication { 
+    auto {} 
   }
 }
 
@@ -77,9 +81,10 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
   secret_data = var.mysql_password
 }
 
-##########################
-# Service Account
-##########################
+##############################
+# Service Account & IAM
+##############################
+
 resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
@@ -89,26 +94,33 @@ resource "google_project_iam_member" "secret_access" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${google_service_account.function_sa.email}"
-
-  depends_on = [google_service_account.function_sa]
 }
 
 resource "google_project_iam_member" "storage_access" {
   project = var.project_id
   role    = "roles/storage.objectAdmin"
   member  = "serviceAccount:${google_service_account.function_sa.email}"
-
-  depends_on = [google_service_account.function_sa]
 }
 
-##########################
-# Cloud Function (event-triggered)
-##########################
+##############################
+# Archive Python Code
+##############################
+
+data "archive_file" "etl_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/src"
+  output_path = "${path.module}/etl.zip"
+}
+
 resource "google_storage_bucket_object" "etl_zip" {
-  name   = "empty.zip"
+  name   = "etl.zip"
   bucket = google_storage_bucket.code_bucket.name
-  source = "./empty.zip"  # replace with your function zip if ready
+  source = data.archive_file.etl_zip.output_path
 }
+
+##############################
+# Cloud Function (Event-based)
+##############################
 
 resource "google_cloudfunctions_function" "etl" {
   name        = "${var.function_name}-${var.env}"
@@ -121,12 +133,11 @@ resource "google_cloudfunctions_function" "etl" {
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
 
+  trigger_http = false
+
   event_trigger {
     event_type = "google.storage.object.finalize"
     resource   = google_storage_bucket.input_bucket.name
-    failure_policy {
-      retry = true
-    }
   }
 
   available_memory_mb = 512
@@ -144,9 +155,4 @@ resource "google_cloudfunctions_function" "etl" {
     secret  = google_secret_manager_secret.mysql_password.secret_id
     version = "latest"
   }
-
-  depends_on = [
-    google_project_iam_member.secret_access,
-    google_project_iam_member.storage_access
-  ]
 }
