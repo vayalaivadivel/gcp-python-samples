@@ -106,7 +106,8 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
 ###########################
 # Service Accounts
 ###########################
-resource "google_service_account" "etl_function_sa" {
+# Keep ETL names unchanged to match existing state/history
+resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
 }
@@ -119,16 +120,17 @@ resource "google_service_account" "order_function_sa" {
 ###########################
 # IAM for Service Accounts
 ###########################
-resource "google_project_iam_member" "etl_storage_access" {
+# Keep ETL names unchanged to avoid recreate/import issues
+resource "google_project_iam_member" "storage_access" {
   project = var.project_id
   role    = "roles/storage.objectAdmin"
-  member  = "serviceAccount:${google_service_account.etl_function_sa.email}"
+  member  = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "etl_mysql_password_access" {
+resource "google_secret_manager_secret_iam_member" "mysql_password_access" {
   secret_id = google_secret_manager_secret.mysql_password.id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.etl_function_sa.email}"
+  member    = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "order_mysql_password_access" {
@@ -200,7 +202,7 @@ resource "google_cloudfunctions_function" "etl" {
   entry_point = "etl_handler"
   region      = var.region
 
-  service_account_email = google_service_account.etl_function_sa.email
+  service_account_email = google_service_account.function_sa.email
 
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
@@ -233,9 +235,9 @@ resource "google_cloudfunctions_function" "etl" {
     google_sql_database.db,
     google_sql_user.user,
     google_storage_bucket_object.etl_zip,
-    google_service_account.etl_function_sa,
-    google_project_iam_member.etl_storage_access,
-    google_secret_manager_secret_iam_member.etl_mysql_password_access,
+    google_service_account.function_sa,
+    google_project_iam_member.storage_access,
+    google_secret_manager_secret_iam_member.mysql_password_access,
     google_secret_manager_secret_version.mysql_password_v
   ]
 }
