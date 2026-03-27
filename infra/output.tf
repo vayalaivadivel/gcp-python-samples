@@ -21,3 +21,12 @@ output "debug_function_env" {
     DB_USER = var.mysql_user
   }
 }
+
+
+output "topic_name" {
+  value = google_pubsub_topic.order_events.name
+}
+
+output "subscription_name" {
+  value = google_pubsub_subscription.order_events_sub.name
+}
