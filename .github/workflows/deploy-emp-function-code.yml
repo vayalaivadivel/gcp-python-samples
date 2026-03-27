@@ -1,4 +1,4 @@
-name: Deploy Function Code (emp-etl)
+name: Deploy Emp-Etl Function Code (emp-etl)
 
 on:
   push:

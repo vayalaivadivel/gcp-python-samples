@@ -199,3 +199,118 @@ resource "google_pubsub_subscription" "order_events_sub" {
 
   depends_on = [google_pubsub_topic.order_events]
 }
+
+
+
+###########################
+# Enable required APIs
+###########################
+resource "google_project_service" "cloudfunctions_api" {
+  project            = var.project_id
+  service            = "cloudfunctions.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudbuild_api" {
+  project            = var.project_id
+  service            = "cloudbuild.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "pubsub_api" {
+  project            = var.project_id
+  service            = "pubsub.googleapis.com"
+  disable_on_destroy = false
+}
+
+###########################
+# Pub/Sub Topic
+###########################
+resource "google_pubsub_topic" "order_events" {
+  name = "order-events-${var.env}"
+
+  depends_on = [google_project_service.pubsub_api]
+}
+
+###########################
+# Service Account for Cloud Function
+###########################
+resource "google_service_account" "function_sa" {
+  account_id   = "order-fn-sa-${var.env}"
+  display_name = "Order Function SA"
+}
+
+###########################
+# Archive function source
+###########################
+data "archive_file" "order_fn_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../order-service/src"
+  output_path = "${path.module}/order_function.zip"
+}
+
+###########################
+# Bucket for function source
+###########################
+resource "google_storage_bucket" "code_bucket" {
+  name          = "${var.project_id}-function-code-${var.env}"
+  location      = var.region
+  force_destroy = true
+
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "order_fn_zip" {
+  name   = "order_function.zip"
+  bucket = google_storage_bucket.code_bucket.name
+  source = data.archive_file.order_fn_zip.output_path
+}
+
+###########################
+# Event-based Cloud Function
+###########################
+resource "google_cloudfunctions_function" "order_consumer" {
+  name        = "order-consumer-${var.env}"
+  description = "Consumes order events from Pub/Sub"
+  runtime     = "python39"
+  region      = var.region
+
+  entry_point           = "process_order_event"
+  source_archive_bucket = google_storage_bucket.code_bucket.name
+  source_archive_object = google_storage_bucket_object.order_fn_zip.name
+
+  event_trigger {
+    event_type = "google.pubsub.topic.publish"
+    resource   = google_pubsub_topic.order_events.name
+  }
+
+  available_memory_mb   = 256
+  timeout               = 60
+  service_account_email = google_service_account.function_sa.email
+
+  environment_variables = {
+    DB_HOST = google_sql_database_instance.mysql.ip_address[0].ip_address
+    DB_NAME = var.mysql_db
+    DB_USER = var.mysql_user
+    DB_PORT = "3306"
+  }
+
+  secret_environment_variables {
+    key     = "DB_PASS"
+    secret  = google_secret_manager_secret.mysql_password.secret_id
+    version = "latest"
+  }
+
+  depends_on = [
+    google_project_service.cloudfunctions_api,
+    google_project_service.cloudbuild_api,
+    google_project_service.pubsub_api,
+    google_sql_database_instance.mysql,
+    google_sql_database.db,
+    google_sql_user.user,
+    google_secret_manager_secret.mysql_password,
+    google_secret_manager_secret_version.mysql_password_v,
+    google_secret_manager_secret_iam_member.mysql_password_access
+  ]
+}
+
