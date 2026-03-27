@@ -1,4 +1,25 @@
 ###########################
+# Enable required APIs
+###########################
+resource "google_project_service" "cloudfunctions_api" {
+  project            = var.project_id
+  service            = "cloudfunctions.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudbuild_api" {
+  project            = var.project_id
+  service            = "cloudbuild.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "pubsub_api" {
+  project            = var.project_id
+  service            = "pubsub.googleapis.com"
+  disable_on_destroy = false
+}
+
+###########################
 # Buckets
 ###########################
 resource "google_storage_bucket" "code_bucket" {
@@ -9,7 +30,7 @@ resource "google_storage_bucket" "code_bucket" {
   uniform_bucket_level_access = true
 
   labels = {
-    "goog-terraform-provisioned" = "true"
+    goog-terraform-provisioned = "true"
   }
 }
 
@@ -83,30 +104,63 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
 }
 
 ###########################
-# Service Account for Cloud Function
+# Service Accounts
 ###########################
-resource "google_service_account" "function_sa" {
+resource "google_service_account" "etl_function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
 }
 
+resource "google_service_account" "order_function_sa" {
+  account_id   = "order-fn-sa-${var.env}"
+  display_name = "Order Function SA"
+}
+
 ###########################
-# IAM for Service Account
+# IAM for Service Accounts
 ###########################
-resource "google_project_iam_member" "storage_access" {
+resource "google_project_iam_member" "etl_storage_access" {
   project = var.project_id
   role    = "roles/storage.objectAdmin"
-  member  = "serviceAccount:${google_service_account.function_sa.email}"
+  member  = "serviceAccount:${google_service_account.etl_function_sa.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "mysql_password_access" {
+resource "google_secret_manager_secret_iam_member" "etl_mysql_password_access" {
   secret_id = google_secret_manager_secret.mysql_password.id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.function_sa.email}"
+  member    = "serviceAccount:${google_service_account.etl_function_sa.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "order_mysql_password_access" {
+  secret_id = google_secret_manager_secret.mysql_password.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.order_function_sa.email}"
 }
 
 ###########################
-# Create Zip from function source
+# Pub/Sub
+###########################
+resource "google_pubsub_topic" "order_events" {
+  name       = "${var.topic_name}-${var.env}"
+  depends_on = [google_project_service.pubsub_api]
+}
+
+resource "google_pubsub_subscription" "order_events_sub" {
+  name  = "${var.subscription_name}-${var.env}"
+  topic = google_pubsub_topic.order_events.name
+
+  ack_deadline_seconds       = 20
+  message_retention_duration = "604800s"
+
+  expiration_policy {
+    ttl = ""
+  }
+
+  depends_on = [google_pubsub_topic.order_events]
+}
+
+###########################
+# Archive source: emp-etl
 ###########################
 data "archive_file" "etl_zip" {
   type        = "zip"
@@ -118,12 +172,27 @@ resource "google_storage_bucket_object" "etl_zip" {
   name       = "etl_function.zip"
   bucket     = google_storage_bucket.code_bucket.name
   source     = data.archive_file.etl_zip.output_path
-
   depends_on = [google_storage_bucket.code_bucket]
 }
 
 ###########################
-# Cloud Function
+# Archive source: order-service
+###########################
+data "archive_file" "order_fn_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../order-service/src"
+  output_path = "${path.module}/order_function.zip"
+}
+
+resource "google_storage_bucket_object" "order_fn_zip" {
+  name       = "order_function.zip"
+  bucket     = google_storage_bucket.code_bucket.name
+  source     = data.archive_file.order_fn_zip.output_path
+  depends_on = [google_storage_bucket.code_bucket]
+}
+
+###########################
+# Cloud Function: emp-etl
 ###########################
 resource "google_cloudfunctions_function" "etl" {
   name        = "etl-function-${var.env}"
@@ -131,7 +200,7 @@ resource "google_cloudfunctions_function" "etl" {
   entry_point = "etl_handler"
   region      = var.region
 
-  service_account_email = google_service_account.function_sa.email
+  service_account_email = google_service_account.etl_function_sa.email
 
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.etl_zip.name
@@ -158,116 +227,21 @@ resource "google_cloudfunctions_function" "etl" {
   }
 
   depends_on = [
+    google_project_service.cloudfunctions_api,
+    google_project_service.cloudbuild_api,
     google_sql_database_instance.mysql,
     google_sql_database.db,
     google_sql_user.user,
     google_storage_bucket_object.etl_zip,
-    google_service_account.function_sa,
-    google_project_iam_member.storage_access,
-    google_secret_manager_secret_iam_member.mysql_password_access,
+    google_service_account.etl_function_sa,
+    google_project_iam_member.etl_storage_access,
+    google_secret_manager_secret_iam_member.etl_mysql_password_access,
     google_secret_manager_secret_version.mysql_password_v
   ]
 }
 
-
-
-
-# Enable Pub/Sub API
-resource "google_project_service" "pubsub_api" {
-  project            = var.project_id
-  service            = "pubsub.googleapis.com"
-  disable_on_destroy = false
-}
-
-# Pub/Sub Topic
-resource "google_pubsub_topic" "order_events" {
-  name = "${var.topic_name}-${var.env}"
-  depends_on = [google_project_service.pubsub_api]
-}
-
-# Pull Subscription
-resource "google_pubsub_subscription" "order_events_sub" {
-  name  = "${var.subscription_name}-${var.env}"
-  topic = google_pubsub_topic.order_events.name
-
-  ack_deadline_seconds       = 20
-  message_retention_duration = "604800s" # 7 days
-
-  expiration_policy {
-    ttl = ""
-  }
-
-  depends_on = [google_pubsub_topic.order_events]
-}
-
-
-
 ###########################
-# Enable required APIs
-###########################
-resource "google_project_service" "cloudfunctions_api" {
-  project            = var.project_id
-  service            = "cloudfunctions.googleapis.com"
-  disable_on_destroy = false
-}
-
-resource "google_project_service" "cloudbuild_api" {
-  project            = var.project_id
-  service            = "cloudbuild.googleapis.com"
-  disable_on_destroy = false
-}
-
-resource "google_project_service" "pubsub_api" {
-  project            = var.project_id
-  service            = "pubsub.googleapis.com"
-  disable_on_destroy = false
-}
-
-###########################
-# Pub/Sub Topic
-###########################
-resource "google_pubsub_topic" "order_events" {
-  name = "order-events-${var.env}"
-
-  depends_on = [google_project_service.pubsub_api]
-}
-
-###########################
-# Service Account for Cloud Function
-###########################
-resource "google_service_account" "function_sa" {
-  account_id   = "order-fn-sa-${var.env}"
-  display_name = "Order Function SA"
-}
-
-###########################
-# Archive function source
-###########################
-data "archive_file" "order_fn_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/../order-service/src"
-  output_path = "${path.module}/order_function.zip"
-}
-
-###########################
-# Bucket for function source
-###########################
-resource "google_storage_bucket" "code_bucket" {
-  name          = "${var.project_id}-function-code-${var.env}"
-  location      = var.region
-  force_destroy = true
-
-  uniform_bucket_level_access = true
-}
-
-resource "google_storage_bucket_object" "order_fn_zip" {
-  name   = "order_function.zip"
-  bucket = google_storage_bucket.code_bucket.name
-  source = data.archive_file.order_fn_zip.output_path
-}
-
-###########################
-# Event-based Cloud Function
+# Cloud Function: order-service
 ###########################
 resource "google_cloudfunctions_function" "order_consumer" {
   name        = "order-consumer-${var.env}"
@@ -286,7 +260,7 @@ resource "google_cloudfunctions_function" "order_consumer" {
 
   available_memory_mb   = 256
   timeout               = 60
-  service_account_email = google_service_account.function_sa.email
+  service_account_email = google_service_account.order_function_sa.email
 
   environment_variables = {
     DB_HOST = google_sql_database_instance.mysql.ip_address[0].ip_address
@@ -308,9 +282,11 @@ resource "google_cloudfunctions_function" "order_consumer" {
     google_sql_database_instance.mysql,
     google_sql_database.db,
     google_sql_user.user,
+    google_storage_bucket_object.order_fn_zip,
+    google_pubsub_topic.order_events,
+    google_service_account.order_function_sa,
     google_secret_manager_secret.mysql_password,
     google_secret_manager_secret_version.mysql_password_v,
-    google_secret_manager_secret_iam_member.mysql_password_access
+    google_secret_manager_secret_iam_member.order_mysql_password_access
   ]
 }
-
