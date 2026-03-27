@@ -21,8 +21,8 @@ resource "google_storage_bucket" "input_bucket" {
   uniform_bucket_level_access = true
 
   labels = {
-    "env"  = var.env
-    "type" = "input"
+    env  = var.env
+    type = "input"
   }
 }
 
@@ -106,11 +106,11 @@ resource "google_secret_manager_secret_iam_member" "mysql_password_access" {
 }
 
 ###########################
-# Create Zip from src
+# Create Zip from function source
 ###########################
 data "archive_file" "etl_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../src"
+  source_dir  = "${path.module}/../emp-etl/src"
   output_path = "${path.module}/etl_function.zip"
 }
 
@@ -118,15 +118,16 @@ resource "google_storage_bucket_object" "etl_zip" {
   name       = "etl_function.zip"
   bucket     = google_storage_bucket.code_bucket.name
   source     = data.archive_file.etl_zip.output_path
+
   depends_on = [google_storage_bucket.code_bucket]
 }
 
 ###########################
-# Cloud Function (event-based)
+# Cloud Function
 ###########################
 resource "google_cloudfunctions_function" "etl" {
   name        = "etl-function-${var.env}"
-  runtime     = "python311"
+  runtime     = "python39"
   entry_point = "etl_handler"
   region      = var.region
 
