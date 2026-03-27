@@ -33,9 +33,8 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 🔐 WIF Authentication
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -47,31 +46,43 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Remove stale Terraform lock
         run: |
           gsutil rm -f gs://vadivel_terraform_buc/etl-project/${{ github.event.inputs.environment }}/default.tflock || true
 
-      # ✅ Always INIT
+      - name: Terraform Fmt
+        run: terraform fmt -check -recursive
+
       - name: Terraform Init
         run: terraform init -input=false
 
-      # ✅ Always PLAN (safety step)
+      - name: Terraform Validate
+        run: terraform validate
+
       - name: Terraform Plan
+        id: plan
         run: |
-          terraform plan -input=false \
+          set +e
+          terraform plan -input=false -out=tfplan \
             -var="env=${{ github.event.inputs.environment }}" \
             -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+          exit_code=$?
 
-      # 🚀 APPLY
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+
+          if [ $exit_code -ne 0 ]; then
+            echo "Terraform plan failed"
+            exit 1
+          fi
+
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         run: |
-          terraform apply -input=false -auto-approve \
-            -var="env=${{ github.event.inputs.environment }}" \
-            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+          terraform apply -input=false -auto-approve tfplan
 
-      # ❌ DESTROY
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
         run: |
