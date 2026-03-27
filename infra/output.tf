@@ -3,11 +3,11 @@
 # ========================
 output "mysql_public_ip" {
   description = "Public IP of MySQL instance"
-   value = google_sql_database_instance.mysql.public_ip_address
+  value       = google_sql_database_instance.mysql.public_ip_address
 }
 
 output "source_code_bucket" {
-  value     = google_storage_bucket.code_bucket.name
+  value = google_storage_bucket.code_bucket.name
 }
 
 output "input_bucket" {
