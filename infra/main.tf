@@ -168,3 +168,34 @@ resource "google_cloudfunctions_function" "etl" {
     google_secret_manager_secret_version.mysql_password_v
   ]
 }
+
+
+
+
+# Enable Pub/Sub API
+resource "google_project_service" "pubsub_api" {
+  project            = var.project_id
+  service            = "pubsub.googleapis.com"
+  disable_on_destroy = false
+}
+
+# Pub/Sub Topic
+resource "google_pubsub_topic" "order_events" {
+  name = "${var.topic_name}-${var.env}"
+  depends_on = [google_project_service.pubsub_api]
+}
+
+# Pull Subscription
+resource "google_pubsub_subscription" "order_events_sub" {
+  name  = "${var.subscription_name}-${var.env}"
+  topic = google_pubsub_topic.order_events.name
+
+  ack_deadline_seconds       = 20
+  message_retention_duration = "604800s" # 7 days
+
+  expiration_policy {
+    ttl = ""
+  }
+
+  depends_on = [google_pubsub_topic.order_events]
+}

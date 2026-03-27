@@ -37,3 +37,16 @@ variable "mysql_password" {
   type        = string
   sensitive   = true
 }
+
+
+variable "topic_name" {
+  type        = string
+  description = "Pub/Sub topic name"
+  default     = "order-events"
+}
+
+variable "subscription_name" {
+  type        = string
+  description = "Pub/Sub subscription name"
+  default     = "order-events-sub"
+}
