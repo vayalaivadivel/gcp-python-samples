@@ -180,7 +180,7 @@ resource "google_storage_bucket_object" "etl_zip" {
 ###########################
 data "archive_file" "order_fn_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../order-service/src"
+  source_dir  = "${path.module}/../order-service-etl/src"
   output_path = "${path.module}/order_function.zip"
 }
 
