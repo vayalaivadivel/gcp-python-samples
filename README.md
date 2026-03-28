@@ -1,188 +1,103 @@
-# 🚀 GCP Serverless ETL Pipeline (Advanced)
+# 🚀 GCP Serverless ETL Platform (Batch + Event-Driven)
 
 ![Terraform](https://img.shields.io/badge/Terraform-IaC-blueviolet)
 ![GCP](https://img.shields.io/badge/GCP-Cloud-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-yellow)
 ![CI/CD](https://img.shields.io/badge/GitHub%20Actions-CI/CD-black)
-![Cloud Functions](https://img.shields.io/badge/Cloud%20Functions-Serverless-orange)
+![Cloud
+Functions](https://img.shields.io/badge/Cloud%20Functions-Serverless-orange)
 
----
+------------------------------------------------------------------------
 
 ## 📌 Overview
 
-This project implements a **production-style, event-driven ETL pipeline on GCP**.
+This project implements a **production-ready serverless ETL platform on
+GCP** supporting:
 
-When a CSV file is uploaded to a Cloud Storage bucket, a Cloud Function is triggered automatically to:
-- validate and parse the file
-- securely fetch DB credentials
-- load data into Cloud SQL (MySQL)
+### 🔹 Batch Pipeline → emp-etl
 
-Infrastructure is fully managed using **Terraform** and deployed via **GitHub Actions CI/CD**.
+-   Trigger: Cloud Storage
+-   Input: CSV files
+-   Output: Cloud SQL (MySQL)
 
----
+### 🔹 Event Pipeline → order-service-etl
 
-## 🏗️ Architecture Diagram
+-   Trigger: Pub/Sub
+-   Input: JSON messages
+-   Output: Cloud SQL (MySQL)
 
-```mermaid
-flowchart TD
-    A[GitHub Repo] --> B[GitHub Actions]
-    B --> C[Terraform]
+------------------------------------------------------------------------
 
-    C --> D[Cloud Storage Bucket]
-    C --> E[Cloud Function]
-    C --> F[Cloud SQL MySQL]
-    C --> G[Secret Manager]
-    C --> H[Service Account + IAM]
+## 🏗️ Architecture
 
-    D -->|CSV Upload| E
-    G -->|DB Password| E
-    H -->|Permissions| E
-    E -->|Insert Data| F
-```
+### Batch ETL
 
----
+CSV → Cloud Storage → Cloud Function → MySQL
 
-## 🔄 End-to-End Flow
+### Event ETL
 
-1. Developer pushes code to GitHub
-2. GitHub Actions runs Terraform
-3. Infrastructure is provisioned:
-   - GCS bucket
-   - Cloud Function
-   - Cloud SQL
-   - Secret Manager
-4. CSV uploaded to bucket
-5. Cloud Function triggered
-6. Function:
-   - downloads CSV
-   - validates schema
-   - inserts data into MySQL
+Producer → Pub/Sub → Cloud Function → MySQL
 
----
+------------------------------------------------------------------------
 
 ## 📂 Project Structure
 
-```
-emp-etl/
-├── infra/
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── output.tf
-│   └── env/
-│       ├── dev.tfvars
-│       └── prod.tfvars
-│
-├── src/
-│   ├── main.py
-│   └── requirements.txt
-│
-├── test/
-│   └── emp.csv
-│
-└── docs/
-    └── architecture.svg
-```
+. ├── emp-etl/ │ ├── src/ │ │ ├── main.py │ │ └── requirements.txt │ └──
+test/ │ └── emp.csv │ ├── order-service-etl/ │ ├── src/ │ │ ├── main.py
+│ │ └── requirements.txt │ └── test/ │ └── publish_order.py │ ├── infra/
+│ ├── main.tf │ ├── variables.tf │ ├── output.tf │ ├── provider.tf │ └──
+env/ │ ├── dev.tfvars │ └── prod.tfvars │ └── README.md
 
----
-
-## 📄 Sample CSV
-
-```csv
-emp_name,dept,salary
-John Doe,Engineering,50000
-Jane Smith,Finance,60000
-```
-
----
+------------------------------------------------------------------------
 
 ## ⚙️ Tech Stack
 
-| Layer | Technology |
-|------|----------|
-| Compute | Cloud Functions |
-| Storage | Cloud Storage |
-| Database | Cloud SQL (MySQL) |
-| Secrets | Secret Manager |
-| IaC | Terraform |
-| CI/CD | GitHub Actions |
-| Language | Python |
+-   Cloud Functions
+-   Cloud Storage
+-   Pub/Sub
+-   Cloud SQL (MySQL)
+-   Secret Manager
+-   Terraform
+-   GitHub Actions
+-   Python
 
----
-
-## 🔐 Security
-
-- Secrets stored in **Secret Manager**
-- Access via **Service Account**
-- IAM roles:
-  - storage.objectAdmin
-  - secretmanager.secretAccessor
-
----
+------------------------------------------------------------------------
 
 ## 🚀 Deployment
 
-```bash
-cd emp-etl/infra
-terraform init
-terraform apply -var="env=dev" -var-file="env/dev.tfvars"
-```
+cd infra terraform init terraform apply -var="env=dev"
+-var-file="env/dev.tfvars"
 
----
+------------------------------------------------------------------------
 
 ## 📤 Testing
 
-```bash
-gcloud storage cp test/emp.csv gs://<bucket>
-gcloud functions logs read etl-function-dev --region=us-central1
-```
+### Batch
 
----
+gcloud storage cp emp-etl/test/emp.csv gs://`<bucket>`{=html}
+
+### Event
+
+gcloud pubsub topics publish order-events-dev\
+--message='{"order_id":"ORD1001","customer_name":"Vadivel"}'
+
+------------------------------------------------------------------------
 
 ## 📊 Output
 
-- Database: `etl_db`
-- Table: `emp`
+Tables: - emp (batch) - orders (event)
 
----
+------------------------------------------------------------------------
 
-## ✅ Features
+## 🎯 Key Features
 
-- Event-driven architecture
-- Serverless ETL
-- Secure secrets management
-- Infrastructure as Code
-- CI/CD enabled
+-   Serverless architecture
+-   Batch + real-time pipelines
+-   Secure secret handling
+-   CI/CD enabled
+-   Scalable design
 
----
-
-## ⚠️ Limitations
-
-- Not optimized for large datasets
-- Public DB access (demo only)
-
----
-
-## 🔮 Future Enhancements
-
-- Pub/Sub integration
-- Dataflow for scaling
-- BigQuery analytics
-- VPC private SQL
-- Monitoring & alerting
-
----
-
-## 🎯 Interview Explanation
-
-Built a serverless ETL pipeline on GCP using Cloud Storage, Cloud Functions, Cloud SQL, Secret Manager, Terraform, and GitHub Actions. Implemented event-driven CSV ingestion and secure data loading into MySQL.
-
----
-
-## 📄 Resume Line
-
-Developed a serverless ETL pipeline on GCP enabling automated CSV ingestion and secure data loading into MySQL using Terraform and CI/CD.
-
----
+------------------------------------------------------------------------
 
 ## 👨‍💻 Author
 
