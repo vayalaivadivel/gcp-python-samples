@@ -19,6 +19,12 @@ resource "google_project_service" "pubsub_api" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "secretmanager_api" {
+  project            = var.project_id
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
 ###########################
 # Buckets
 ###########################
@@ -30,7 +36,8 @@ resource "google_storage_bucket" "code_bucket" {
   uniform_bucket_level_access = true
 
   labels = {
-    goog-terraform-provisioned = "true"
+    env  = var.env
+    type = "code"
   }
 }
 
@@ -68,6 +75,7 @@ resource "google_sql_database_instance" "mysql" {
     ip_configuration {
       ipv4_enabled = true
 
+      # Dev/testing only. Restrict in production.
       authorized_networks {
         name  = "all-access"
         value = "0.0.0.0/0"
@@ -91,11 +99,16 @@ resource "google_sql_user" "user" {
 # Secret Manager: DB password
 ###########################
 resource "google_secret_manager_secret" "mysql_password" {
+  project   = var.project_id
   secret_id = "${var.mysql_user}-password-${var.env}"
 
   replication {
     auto {}
   }
+
+  depends_on = [
+    google_project_service.secretmanager_api
+  ]
 }
 
 resource "google_secret_manager_secret_version" "mysql_password_v" {
@@ -106,7 +119,6 @@ resource "google_secret_manager_secret_version" "mysql_password_v" {
 ###########################
 # Service Accounts
 ###########################
-# Keep ETL names unchanged to match existing state/history
 resource "google_service_account" "function_sa" {
   account_id   = "etl-fn-sa-${var.env}"
   display_name = "ETL Function SA"
@@ -120,21 +132,22 @@ resource "google_service_account" "order_function_sa" {
 ###########################
 # IAM for Service Accounts
 ###########################
-# Keep ETL names unchanged to avoid recreate/import issues
-resource "google_project_iam_member" "storage_access" {
-  project = var.project_id
-  role    = "roles/storage.objectAdmin"
-  member  = "serviceAccount:${google_service_account.function_sa.email}"
+resource "google_storage_bucket_iam_member" "etl_input_bucket_reader" {
+  bucket = google_storage_bucket.input_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "mysql_password_access" {
-  secret_id = google_secret_manager_secret.mysql_password.id
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.mysql_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.function_sa.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "order_mysql_password_access" {
-  secret_id = google_secret_manager_secret.mysql_password.id
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.mysql_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.order_function_sa.email}"
 }
@@ -174,6 +187,7 @@ resource "google_storage_bucket_object" "etl_zip" {
   name       = "etl_function.zip"
   bucket     = google_storage_bucket.code_bucket.name
   source     = data.archive_file.etl_zip.output_path
+
   depends_on = [google_storage_bucket.code_bucket]
 }
 
@@ -190,6 +204,7 @@ resource "google_storage_bucket_object" "order_fn_zip" {
   name       = "order_function.zip"
   bucket     = google_storage_bucket.code_bucket.name
   source     = data.archive_file.order_fn_zip.output_path
+
   depends_on = [google_storage_bucket.code_bucket]
 }
 
@@ -198,6 +213,7 @@ resource "google_storage_bucket_object" "order_fn_zip" {
 ###########################
 resource "google_cloudfunctions_function" "etl" {
   name        = "etl-function-${var.env}"
+  description = "ETL function triggered by GCS file upload"
   runtime     = "python39"
   entry_point = "etl_handler"
   region      = var.region
@@ -220,6 +236,7 @@ resource "google_cloudfunctions_function" "etl" {
     DB_HOST      = google_sql_database_instance.mysql.ip_address[0].ip_address
     DB_NAME      = var.mysql_db
     DB_USER      = var.mysql_user
+    DB_PORT      = "3306"
   }
 
   secret_environment_variables {
@@ -231,14 +248,16 @@ resource "google_cloudfunctions_function" "etl" {
   depends_on = [
     google_project_service.cloudfunctions_api,
     google_project_service.cloudbuild_api,
+    google_project_service.secretmanager_api,
     google_sql_database_instance.mysql,
     google_sql_database.db,
     google_sql_user.user,
     google_storage_bucket_object.etl_zip,
     google_service_account.function_sa,
-    google_project_iam_member.storage_access,
-    google_secret_manager_secret_iam_member.mysql_password_access,
-    google_secret_manager_secret_version.mysql_password_v
+    google_storage_bucket_iam_member.etl_input_bucket_reader,
+    google_secret_manager_secret.mysql_password,
+    google_secret_manager_secret_version.mysql_password_v,
+    google_secret_manager_secret_iam_member.mysql_password_access
   ]
 }
 
@@ -249,9 +268,11 @@ resource "google_cloudfunctions_function" "order_consumer" {
   name        = "order-consumer-${var.env}"
   description = "Consumes order events from Pub/Sub"
   runtime     = "python39"
+  entry_point = "process_order_event"
   region      = var.region
 
-  entry_point           = "process_order_event"
+  service_account_email = google_service_account.order_function_sa.email
+
   source_archive_bucket = google_storage_bucket.code_bucket.name
   source_archive_object = google_storage_bucket_object.order_fn_zip.name
 
@@ -260,9 +281,8 @@ resource "google_cloudfunctions_function" "order_consumer" {
     resource   = google_pubsub_topic.order_events.name
   }
 
-  available_memory_mb   = 256
-  timeout               = 60
-  service_account_email = google_service_account.order_function_sa.email
+  available_memory_mb = 256
+  timeout             = 60
 
   environment_variables = {
     DB_HOST = google_sql_database_instance.mysql.ip_address[0].ip_address
@@ -281,6 +301,7 @@ resource "google_cloudfunctions_function" "order_consumer" {
     google_project_service.cloudfunctions_api,
     google_project_service.cloudbuild_api,
     google_project_service.pubsub_api,
+    google_project_service.secretmanager_api,
     google_sql_database_instance.mysql,
     google_sql_database.db,
     google_sql_user.user,
