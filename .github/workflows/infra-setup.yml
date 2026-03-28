@@ -23,7 +23,66 @@ permissions:
   contents: read
 
 jobs:
-  terraform:
+  terraform-owner:
+    name: Terraform (${{ github.event.inputs.action }}) - owner direct
+    if: github.actor == 'YOUR_OWNER_USERNAME'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Remove stale Terraform lock
+        run: |
+          gsutil rm -f gs://vadivel_terraform_buc/etl-project/${{ github.event.inputs.environment }}/default.tflock || true
+
+      - name: Terraform Fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -input=false -out=tfplan \
+            -var="env=${{ github.event.inputs.environment }}" \
+            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
+        run: |
+          terraform destroy -input=false -auto-approve \
+            -var="env=${{ github.event.inputs.environment }}" \
+            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+
+  terraform-approved:
+    name: Terraform (${{ github.event.inputs.action }}) - approval required
+    if: github.actor != 'YOUR_OWNER_USERNAME'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
 
@@ -63,25 +122,14 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        id: plan
         run: |
-          set +e
           terraform plan -input=false -out=tfplan \
             -var="env=${{ github.event.inputs.environment }}" \
             -var-file="env/${{ github.event.inputs.environment }}.tfvars"
-          exit_code=$?
-
-          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
-
-          if [ $exit_code -ne 0 ]; then
-            echo "Terraform plan failed"
-            exit 1
-          fi
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
-        run: |
-          terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
 
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
