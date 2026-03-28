@@ -184,9 +184,9 @@ data "archive_file" "etl_zip" {
 }
 
 resource "google_storage_bucket_object" "etl_zip" {
-  name       = "etl_function.zip"
-  bucket     = google_storage_bucket.code_bucket.name
-  source     = data.archive_file.etl_zip.output_path
+  name   = "etl_function.zip"
+  bucket = google_storage_bucket.code_bucket.name
+  source = data.archive_file.etl_zip.output_path
 
   depends_on = [google_storage_bucket.code_bucket]
 }
@@ -201,9 +201,9 @@ data "archive_file" "order_fn_zip" {
 }
 
 resource "google_storage_bucket_object" "order_fn_zip" {
-  name       = "order_function.zip"
-  bucket     = google_storage_bucket.code_bucket.name
-  source     = data.archive_file.order_fn_zip.output_path
+  name   = "order_function.zip"
+  bucket = google_storage_bucket.code_bucket.name
+  source = data.archive_file.order_fn_zip.output_path
 
   depends_on = [google_storage_bucket.code_bucket]
 }
