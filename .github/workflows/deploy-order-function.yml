@@ -1,12 +1,12 @@
-name: Deploy Emp-Etl Function Code (emp-etl)
+name: Deploy Order-Service Function (order-service-etl)
 
 on:
   push:
     branches:
       - main
     paths:
-      - "emp-etl/src/**"
-      - ".github/workflows/deploy-function-code.yml"
+      - "order-service-etl/src/**"
+      - ".github/workflows/deploy-order-function-code.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -45,26 +45,26 @@ jobs:
 
       - name: Create source zip
         run: |
-          cd emp-etl/src
-          zip -r ../../etl_function.zip .
+          cd order-service-etl/src
+          zip -r ../../order_function.zip .
 
       - name: Upload source zip to code bucket
         run: |
-          gcloud storage cp etl_function.zip gs://${PROJECT_ID}-function-code-${ENV}/etl_function.zip
+          gcloud storage cp order_function.zip gs://${PROJECT_ID}-function-code-${ENV}/order_function.zip
 
       - name: Deploy updated Cloud Function
         run: |
-          gcloud functions deploy etl-function-${ENV} \
+          gcloud functions deploy order-consumer-${ENV} \
             --no-gen2 \
             --project=${PROJECT_ID} \
             --region=${{ secrets.GCP_REGION }} \
             --runtime=python311 \
-            --entry-point=etl_handler \
-            --source=emp-etl/src \
-            --trigger-bucket=${PROJECT_ID}-input-${ENV} \
-            --service-account=etl-fn-sa-${ENV}@${PROJECT_ID}.iam.gserviceaccount.com \
-            --set-env-vars=INPUT_BUCKET=${PROJECT_ID}-input-${ENV},DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }} \
+            --entry-point=process_order_event \
+            --source=order-service-etl/src \
+            --trigger-topic=order-events-${ENV} \
+            --service-account=order-fn-sa-${ENV}@${PROJECT_ID}.iam.gserviceaccount.com \
+            --set-env-vars=DB_HOST=${{ secrets.DB_HOST }},DB_NAME=${{ secrets.DB_NAME }},DB_USER=${{ secrets.DB_USER }},DB_PORT=3306 \
             --set-secrets=DB_PASS=projects/${PROJECT_ID}/secrets/ravula-password-${ENV}:latest \
-            --memory=512MB \
-            --timeout=540s \
+            --memory=256MB \
+            --timeout=60s \
             --quiet
