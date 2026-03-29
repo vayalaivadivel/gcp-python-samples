@@ -41,10 +41,10 @@ When an order event is published to a Pub/Sub topic, a Cloud Function consumes t
 ## 🏗️ Architecture Diagrams
 
 ### Batch ETL
-![Batch ETL Architecture](architecture-batch.png)
+![Batch ETL Architecture](docs/screenshots/architecture-batch.png)
 
 ### Event-Driven ETL
-![Event-Driven ETL Architecture](architecture-event.png)
+![Event-Driven ETL Architecture](docs/screenshots/architecture-event.png)
 
 ---
 
@@ -52,60 +52,31 @@ When an order event is published to a Pub/Sub topic, a Cloud Function consumes t
 
 I cannot generate real Cloud Console screenshots from your GCP account here, but this README is structured so you can add them directly once captured.
 
-Place these images under:
-
-```text
-docs/screenshots/
-```
-
-Recommended screenshots:
-
-- `docs/screenshots/cloud-storage-bucket.png`
-- `docs/screenshots/etl-function-details.png`
-- `docs/screenshots/pubsub-topic.png`
-- `docs/screenshots/order-consumer-function.png`
-- `docs/screenshots/cloud-sql-instance.png`
-- `docs/screenshots/github-actions-success.png`
-- `docs/screenshots/function-logs.png`
-
-Then uncomment or keep these sections:
-
-### Suggested screenshots to add
 
 #### Cloud Storage bucket
-```md
 ![Cloud Storage Bucket](docs/screenshots/cloud-storage-bucket.png)
-```
+
 
 #### emp-etl Cloud Function
-```md
 ![ETL Function](docs/screenshots/etl-function-details.png)
-```
+
 
 #### Pub/Sub topic
-```md
 ![Pub/Sub Topic](docs/screenshots/pubsub-topic.png)
-```
+
 
 #### order-service Cloud Function
-```md
 ![Order Consumer Function](docs/screenshots/order-consumer-function.png)
-```
 
 #### Cloud SQL instance
-```md
 ![Cloud SQL Instance](docs/screenshots/cloud-sql-instance.png)
-```
+
 
 #### GitHub Actions deployment
-```md
 ![GitHub Actions Success](docs/screenshots/github-actions-success.png)
-```
 
 #### Function logs
-```md
 ![Function Logs](docs/screenshots/function-logs.png)
-```
 
 ---
 
