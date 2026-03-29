@@ -18,6 +18,16 @@ CREATE TABLE IF NOT EXISTS emp (
 )
 """
 
+CREATE_TOTAL_SALARY_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS total_salary (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    file_name VARCHAR(255) NOT NULL,
+    total_salary DECIMAL(12,2) NOT NULL,
+    total_employees INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+"""
+
 INSERT_EMP_SQL = """
 INSERT INTO emp (emp_id, emp_name, dept, salary)
 VALUES (%s, %s, %s, %s)
@@ -25,6 +35,11 @@ VALUES (%s, %s, %s, %s)
 
 INSERT_EMP_NO_ID_SQL = """
 INSERT INTO emp (emp_name, dept, salary)
+VALUES (%s, %s, %s)
+"""
+
+INSERT_TOTAL_SALARY_SQL = """
+INSERT INTO total_salary (file_name, total_salary, total_employees)
 VALUES (%s, %s, %s)
 """
 
@@ -40,6 +55,10 @@ def get_db_connection():
 
 def create_emp_table_if_not_exists(cursor):
     cursor.execute(CREATE_EMP_TABLE_SQL)
+
+
+def create_total_salary_table_if_not_exists(cursor):
+    cursor.execute(CREATE_TOTAL_SALARY_TABLE_SQL)
 
 
 def download_file_from_gcs(bucket_name, file_name, local_path):
@@ -63,6 +82,7 @@ def parse_int(value):
 
 def process_csv_and_insert(cursor, csv_file_path):
     inserted_count = 0
+    total_salary = 0.0
 
     with open(csv_file_path, mode="r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -88,8 +108,16 @@ def process_csv_and_insert(cursor, csv_file_path):
                 cursor.execute(INSERT_EMP_NO_ID_SQL, (emp_name, dept, salary))
 
             inserted_count += 1
+            total_salary += salary if salary is not None else 0.0
 
-    return inserted_count
+    return inserted_count, total_salary
+
+
+def insert_total_salary_summary(cursor, file_name, total_salary, total_employees):
+    cursor.execute(
+        INSERT_TOTAL_SALARY_SQL,
+        (file_name, total_salary, total_employees)
+    )
 
 
 def etl_handler(event, context):
@@ -119,10 +147,19 @@ def etl_handler(event, context):
         cursor = conn.cursor()
 
         create_emp_table_if_not_exists(cursor)
-        inserted_count = process_csv_and_insert(cursor, local_file_path)
+        create_total_salary_table_if_not_exists(cursor)
+
+        inserted_count, total_salary = process_csv_and_insert(cursor, local_file_path)
+        insert_total_salary_summary(cursor, file_name, total_salary, inserted_count)
 
         conn.commit()
-        logging.info("Inserted %s rows into emp table from file %s", inserted_count, file_name)
+
+        logging.info(
+            "Inserted %s rows into emp table from file %s; total salary = %s",
+            inserted_count,
+            file_name,
+            total_salary,
+        )
 
     except Exception as e:
         if conn:
