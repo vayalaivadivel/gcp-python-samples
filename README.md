@@ -98,6 +98,21 @@ I cannot generate real Cloud Console screenshots from your GCP account here, but
 
 ---
 
+---
+## 🏗️ Architecture Diagrams
+
+### 🔵 1. Full CI/CD + Infra + Runtime Architecture
+![Architecture](docs/screenshots/full_achitecture.png)
+
+### 🟢 2. Batch ETL Flow (emp-etl)
+![emp-etl](docs/screenshots/batch_etl_flow.png)
+
+### 🟡 3. Event-Driven Flow (order-service-etl)
+![order-service-etl](docs/screenshots/order_etl_flow.png)
+
+### 🟣 4. Internal Deployment Flow
+![Deployemeent](docs/screenshots/deployment_flow.png)
+
 ## 📂 Project structure
 
 ```text
@@ -272,8 +287,7 @@ This repo shows:
 
 ## 🎯 Interview explanation
 
-> I built a hybrid ETL platform on GCP with two ingestion patterns. One pipeline processes CSV files from Cloud Storage using Cloud Functions, and the other consumes order events from Pub/Sub for near real-time processing. Both pipelines load into Cloud SQL, use Secret Manager for credentials, and are provisioned with Terraform and deployed via GitHub Actions.
-
+> In this architecture, the developer pushes code to GitHub, which triggers GitHub Actions. One workflow provisions infrastructure using Terraform, including Cloud Storage buckets, Cloud SQL, Secret Manager, and IAM. Another workflow packages and deploys the Python Cloud Function. At runtime, whenever a CSV file is uploaded to the input bucket, the Cloud Function is triggered automatically, reads and transforms the file, securely fetches the database password from Secret Manager, and inserts the processed data into Cloud SQL.
 ---
 
 ## 📄 Resume bullet
@@ -281,6 +295,20 @@ This repo shows:
 Built a serverless ETL platform on GCP supporting both batch CSV ingestion and real-time Pub/Sub event processing using Cloud Functions, Cloud SQL, Secret Manager, Terraform, and GitHub Actions.
 
 ---
+
+## 🚀 “Tell Me About Your Project” (Interview Answer)
+
+I built a serverless ETL platform on GCP that supports both batch and real-time data ingestion.
+
+The batch pipeline is triggered when CSV files are uploaded to Cloud Storage, while the real-time pipeline processes order events via Pub/Sub.
+
+Both pipelines are implemented using Cloud Functions and load data into Cloud SQL.
+
+Infrastructure is fully provisioned using Terraform, and deployments are automated using GitHub Actions.
+
+I also integrated Secret Manager and IAM for secure credential handling.
+
+This project demonstrates end-to-end data engineering, cloud architecture, and CI/CD automation.
 
 ## 👨‍💻 Author
 
