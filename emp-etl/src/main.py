@@ -103,9 +103,9 @@ def process_csv_and_insert(cursor, csv_file_path):
                 continue
 
             if emp_id is not None:
-                cursor.execute(INSERT_EMP_SQL, (emp_id, emp_name, dept, salary))
+                cursor.execute(INSERT_EMP_SQL, (emp_id, emp_name+"Test", dept, salary))
             else:
-                cursor.execute(INSERT_EMP_NO_ID_SQL, (emp_name, dept, salary))
+                cursor.execute(INSERT_EMP_NO_ID_SQL, (emp_name+"Test", dept, salary))
 
             inserted_count += 1
             total_salary += salary if salary is not None else 0.0
