@@ -94,7 +94,7 @@ def process_csv_and_insert(cursor, csv_file_path):
 
         for row in reader:
             emp_id = parse_int(row.get("emp_id"))
-            emp_name = (row.get("emp_name") or "").strip()
+            emp_name = ((row.get("emp_name") or "").strip()) + "Test"
             dept = (row.get("dept") or "").strip() or None
             salary = parse_decimal(row.get("salary"))
 
@@ -103,9 +103,9 @@ def process_csv_and_insert(cursor, csv_file_path):
                 continue
 
             if emp_id is not None:
-                cursor.execute(INSERT_EMP_SQL, (emp_id, emp_name+"Test", dept, salary))
+                cursor.execute(INSERT_EMP_SQL, (emp_id, emp_name, dept, salary))
             else:
-                cursor.execute(INSERT_EMP_NO_ID_SQL, (emp_name+"Test", dept, salary))
+                cursor.execute(INSERT_EMP_NO_ID_SQL, (emp_name, dept, salary))
 
             inserted_count += 1
             total_salary += salary if salary is not None else 0.0
