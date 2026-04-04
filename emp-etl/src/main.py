@@ -125,7 +125,7 @@ def etl_handler(event, context):
     file_name = event.get("name")
 
     if not bucket_name or not file_name:
-        logging.error("Missing bucket or file name in event: %s", event)
+        logging.error("Missing cloud-storage bucket or file name in event: %s", event)
         return
 
     logging.info("Triggered for bucket=%s, file=%s", bucket_name, file_name)
