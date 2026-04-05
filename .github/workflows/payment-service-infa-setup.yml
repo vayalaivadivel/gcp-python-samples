@@ -50,6 +50,12 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Debug paths
+        run: |
+          pwd
+          ls -R ..
+          ls -R ../env || true
+
       - name: Remove stale Terraform lock
         run: |
           gsutil rm -f gs://vadivel_terraform_buc/payment-service/${{ github.event.inputs.environment }}/default.tflock || true
@@ -67,10 +73,11 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        if: github.event.inputs.action == 'apply'
         run: |
           terraform plan -input=false -out=tfplan \
             -var="env=${{ github.event.inputs.environment }}" \
-            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+            -var-file="../env/${{ github.event.inputs.environment }}.tfvars"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -81,17 +88,17 @@ jobs:
         run: |
           terraform destroy -input=false -auto-approve \
             -var="env=${{ github.event.inputs.environment }}" \
-            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+            -var-file="../env/${{ github.event.inputs.environment }}.tfvars"
 
   terraform-approved:
     name: Terraform (${{ github.event.inputs.action }}) - approval required
-    if: github.actor != 'YOUR_OWNER_USERNAME'
+    if: github.actor != 'vayalaivadivel'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
 
     defaults:
       run:
-        working-directory: infra
+        working-directory: payment-service/infra
 
     steps:
       - name: Checkout
@@ -111,6 +118,12 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Debug paths
+        run: |
+          pwd
+          ls -R ..
+          ls -R ../env || true
+
       - name: Remove stale Terraform lock
         run: |
           gsutil rm -f gs://vadivel_terraform_buc/payment-service/${{ github.event.inputs.environment }}/default.tflock || true
@@ -128,10 +141,11 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        if: github.event.inputs.action == 'apply'
         run: |
           terraform plan -input=false -out=tfplan \
             -var="env=${{ github.event.inputs.environment }}" \
-            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+            -var-file="../env/${{ github.event.inputs.environment }}.tfvars"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -142,4 +156,4 @@ jobs:
         run: |
           terraform destroy -input=false -auto-approve \
             -var="env=${{ github.event.inputs.environment }}" \
-            -var-file="env/${{ github.event.inputs.environment }}.tfvars"
+            -var-file="../env/${{ github.event.inputs.environment }}.tfvars"
