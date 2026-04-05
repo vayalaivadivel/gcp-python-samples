@@ -1,4 +1,4 @@
-name: Infra Setup (payment-pubsub-dataflow)
+name: Infra Setup (payment-service)
 
 on:
   workflow_dispatch:
