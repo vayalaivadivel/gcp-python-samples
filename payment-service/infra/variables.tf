@@ -14,39 +14,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-# Cloud Function
-variable "function_name" {
-  description = "Cloud Function name"
-  type        = string
-  default     = "etl-function"
-}
-
-variable "function_runtime" {
-  description = "Cloud Function runtime"
-  type        = string
-  default     = "python311"
-}
-
-# MySQL
-variable "mysql_db" {
-  description = "MySQL database name"
-  type        = string
-  default     = "etl_db"
-}
-
-variable "mysql_user" {
-  description = "MySQL username"
-  type        = string
-  default     = "etl_user"
-}
-
-variable "mysql_password" {
-  description = "MySQL password"
-  type        = string
-  sensitive   = true
-}
-
-# Pub/Sub
 variable "topic_name" {
   type        = string
   description = "Base Pub/Sub topic name"
@@ -59,7 +26,6 @@ variable "subscription_name" {
   default     = "payment-events-sub"
 }
 
-# Dataflow
 variable "dataflow_job_name" {
   description = "Base Dataflow job name"
   type        = string
@@ -84,7 +50,6 @@ variable "use_storage_write_api_at_least_once" {
   default     = false
 }
 
-# BigQuery
 variable "dataset_name" {
   description = "Base BigQuery dataset name"
   type        = string
@@ -97,7 +62,6 @@ variable "table_name" {
   default     = "payment_events"
 }
 
-# GCS
 variable "dataflow_bucket_prefix" {
   description = "Prefix for Dataflow temp bucket"
   type        = string

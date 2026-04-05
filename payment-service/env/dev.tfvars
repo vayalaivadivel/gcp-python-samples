@@ -13,5 +13,5 @@ table_name   = "payment_events"
 
 dataflow_bucket_prefix = "dataflow"
 
-use_storage_write_api                 = false
-use_storage_write_api_at_least_once   = false
+use_storage_write_api               = false
+use_storage_write_api_at_least_once = false
