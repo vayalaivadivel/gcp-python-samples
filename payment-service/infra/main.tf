@@ -203,6 +203,12 @@ resource "google_project_iam_member" "pubsub_viewer_role" {
   member  = "serviceAccount:${google_service_account.dataflow_worker.email}"
 }
 
+
+resource "google_project_iam_member" "pubsub_editor_role" {
+  project = var.project_id
+  role    = "roles/pubsub.editor"
+  member  = "serviceAccount:${google_service_account.dataflow_worker.email}"
+}
 #
 # Dataflow Flex Template Job
 #
@@ -237,6 +243,7 @@ resource "google_dataflow_flex_template_job" "pubsub_to_bigquery" {
     google_project_iam_member.bigquery_data_editor_role,
     google_project_iam_member.bigquery_job_user_role,
     google_project_iam_member.pubsub_subscriber_role,
-    google_project_iam_member.pubsub_viewer_role
+    google_project_iam_member.pubsub_viewer_role,
+    google_project_iam_member.pubsub_editor_role
   ]
 }
