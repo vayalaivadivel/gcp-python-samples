@@ -1,4 +1,4 @@
-name: Infra Setup (payment-service)
+name: Payment Service Infra Setup
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ permissions:
 jobs:
   terraform-owner:
     name: Terraform (${{ github.event.inputs.action }}) - owner direct
-    if: github.actor == 'YOUR_OWNER_USERNAME'
+    if: github.actor == 'vayalaivadivel'
     runs-on: ubuntu-latest
 
     defaults:
@@ -52,21 +52,17 @@ jobs:
 
       - name: Remove stale Terraform lock
         run: |
-          gsutil rm -f gs://vadivel_terraform_buc/payment-pipeline/${{ github.event.inputs.environment }}/default.tflock || true
+          gsutil rm -f gs://vadivel_terraform_buc/payment-service/${{ github.event.inputs.environment }}/default.tflock || true
 
       - name: Terraform Fmt
         run: terraform fmt -check -recursive
-
-      - name: Remove stale Terraform lock
-        run: |
-          gsutil rm -f gs://vadivel_terraform_buc/payment-service/${{ github.event.inputs.environment }}/default.tflock || true
 
       - name: Terraform Init
         run: |
           terraform init -input=false \
             -backend-config="bucket=vadivel_terraform_buc" \
             -backend-config="prefix=payment-service/${{ github.event.inputs.environment }}"
-  
+
       - name: Terraform Validate
         run: terraform validate
 
@@ -117,7 +113,7 @@ jobs:
 
       - name: Remove stale Terraform lock
         run: |
-          gsutil rm -f gs://vadivel_terraform_buc/payment-pipeline/${{ github.event.inputs.environment }}/default.tflock || true
+          gsutil rm -f gs://vadivel_terraform_buc/payment-service/${{ github.event.inputs.environment }}/default.tflock || true
 
       - name: Terraform Fmt
         run: terraform fmt -check -recursive
@@ -126,7 +122,7 @@ jobs:
         run: |
           terraform init -input=false \
             -backend-config="bucket=vadivel_terraform_buc" \
-            -backend-config="prefix=payment-pipeline/${{ github.event.inputs.environment }}"
+            -backend-config="prefix=payment-service/${{ github.event.inputs.environment }}"
 
       - name: Terraform Validate
         run: terraform validate
