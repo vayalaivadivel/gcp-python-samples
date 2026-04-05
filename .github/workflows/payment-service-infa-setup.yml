@@ -66,8 +66,7 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=vadivel_terraform_buc" \
             -backend-config="prefix=payment-service/${{ github.event.inputs.environment }}"
-            
-      - name: 
+  
       - name: Terraform Validate
         run: terraform validate
 
